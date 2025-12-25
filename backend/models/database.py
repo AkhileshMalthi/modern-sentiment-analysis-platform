@@ -11,8 +11,8 @@ class SocialMediaPost(Base):
     source = Column(String(50), index=True)
     content = Column(Text)
     author = Column(String(255))
-    created_at = Column(DateTime)
-    ingested_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True))
+    ingested_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 class SentimentAnalysis(Base):
     __tablename__ = "sentiment_analysis"
@@ -22,7 +22,7 @@ class SentimentAnalysis(Base):
     sentiment_label = Column(String(20)) # positive, negative, neutral
     confidence_score = Column(Float)
     emotion = Column(String(50), nullable=True)
-    analyzed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    analyzed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
 
 class SentimentAlert(Base):
     __tablename__ = "sentiment_alerts"
@@ -30,8 +30,8 @@ class SentimentAlert(Base):
     alert_type = Column(String(50))
     threshold_value = Column(Float)
     actual_value = Column(Float)
-    window_start = Column(DateTime)
-    window_end = Column(DateTime)
+    window_start = Column(DateTime(timezone=True))
+    window_end = Column(DateTime(timezone=True))
     post_count = Column(Integer)
-    triggered_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    triggered_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
     details = Column(JSON)

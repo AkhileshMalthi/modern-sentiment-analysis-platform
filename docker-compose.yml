@@ -32,6 +32,8 @@ services:
     ports:
       - "8000:8000"
     env_file: .env
+    volumes:
+      - huggingface_cache:/root/.cache/huggingface
     depends_on:
       db:
         condition: service_healthy
@@ -40,8 +42,12 @@ services:
 
   # 4. Worker Service
   worker:
-    build: ./worker
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
     env_file: .env
+    volumes:
+      - huggingface_cache:/root/.cache/huggingface
     depends_on:
       db:
         condition: service_healthy
@@ -66,3 +72,4 @@ services:
 
 volumes:
   postgres_data:
+  huggingface_cache:
