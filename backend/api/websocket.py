@@ -1,0 +1,185 @@
+from datetime import datetime, timezone, timedelta
+from fastapi import WebSocket, WebSocketDisconnect, APIRouter
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy import select, func, and_
+import asyncio
+import os
+from models.database import SocialMediaPost, SentimentAnalysis
+
+router = APIRouter()
+
+# Database setup
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://sentiment_user:secure_password_123@localhost:5432/sentiment_db")
+engine = create_async_engine(DATABASE_URL, pool_pre_ping=True)
+AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: dict):
+        """Broadcast message to all connected clients"""
+        disconnected = []
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception as e:
+                print(f"Error sending to client: {e}")
+                disconnected.append(connection)
+        
+        # Remove disconnected clients
+        for conn in disconnected:
+            self.disconnect(conn)
+
+manager = ConnectionManager()
+
+async def get_metrics_data():
+    """Get sentiment metrics for different timeframes"""
+    async with AsyncSessionLocal() as db:
+        metrics = {
+            "last_minute": {"positive": 0, "negative": 0, "neutral": 0, "total": 0},
+            "last_hour": {"positive": 0, "negative": 0, "neutral": 0, "total": 0},
+            "last_24_hours": {"positive": 0, "negative": 0, "neutral": 0, "total": 0}
+        }
+        
+        now = datetime.now(timezone.utc)
+        timeframes = {
+            "last_minute": now - timedelta(minutes=1),
+            "last_hour": now - timedelta(hours=1),
+            "last_24_hours": now - timedelta(hours=24)
+        }
+        
+        for timeframe_key, threshold in timeframes.items():
+            query = select(
+                SentimentAnalysis.sentiment_label,
+                func.count(SentimentAnalysis.id).label('count')
+            ).where(
+                SentimentAnalysis.analyzed_at >= threshold
+            ).group_by(SentimentAnalysis.sentiment_label)
+            
+            result = await db.execute(query)
+            rows = result.all()
+            
+            for row in rows:
+                sentiment_label = row[0]
+                count_value = row[1]
+                metrics[timeframe_key][sentiment_label] = count_value
+                metrics[timeframe_key]["total"] += count_value
+        
+        return metrics
+
+async def send_periodic_metrics():
+    """Send metrics updates every 30 seconds to all connected clients"""
+    while True:
+        try:
+            await asyncio.sleep(30)
+            
+            if len(manager.active_connections) > 0:
+                metrics = await get_metrics_data()
+                
+                message = {
+                    "type": "metrics_update",
+                    "data": metrics,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+                
+                await manager.broadcast(message)
+        except Exception as e:
+            print(f"Error in periodic metrics: {e}")
+
+async def monitor_new_posts():
+    """Monitor database for new posts and broadcast them"""
+    last_check = datetime.now(timezone.utc)
+    
+    while True:
+        try:
+            await asyncio.sleep(2)  # Check every 2 seconds
+            
+            if len(manager.active_connections) == 0:
+                last_check = datetime.now(timezone.utc)
+                continue
+            
+            async with AsyncSessionLocal() as db:
+                # Query for new posts since last check
+                query = select(SocialMediaPost, SentimentAnalysis).join(
+                    SentimentAnalysis,
+                    SocialMediaPost.post_id == SentimentAnalysis.post_id,
+                    isouter=True
+                ).where(
+                    SocialMediaPost.ingested_at > last_check
+                ).order_by(SocialMediaPost.ingested_at)
+                
+                result = await db.execute(query)
+                rows = result.all()
+                
+                for post, sentiment_data in rows:
+                    # Truncate content to first 100 characters
+                    content_preview = post.content[:100] + "..." if len(post.content) > 100 else post.content
+                    
+                    message = {
+                        "type": "new_post",
+                        "data": {
+                            "post_id": post.post_id,
+                            "content": content_preview,
+                            "source": post.source,
+                            "sentiment_label": sentiment_data.sentiment_label if sentiment_data else None,
+                            "confidence_score": sentiment_data.confidence_score if sentiment_data else None,
+                            "emotion": sentiment_data.emotion if sentiment_data else None,
+                            "timestamp": post.created_at.isoformat() if post.created_at else datetime.now(timezone.utc).isoformat()
+                        }
+                    }
+                    
+                    await manager.broadcast(message)
+                
+                last_check = datetime.now(timezone.utc)
+        
+        except Exception as e:
+            print(f"Error monitoring new posts: {e}")
+            await asyncio.sleep(5)
+
+# Start background tasks
+metrics_task = None
+monitor_task = None
+
+@router.on_event("startup")
+async def startup_event():
+    """Start background tasks on application startup"""
+    global metrics_task, monitor_task
+    metrics_task = asyncio.create_task(send_periodic_metrics())
+    monitor_task = asyncio.create_task(monitor_new_posts())
+
+@router.websocket("/ws/sentiment")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time sentiment updates"""
+    await manager.connect(websocket)
+    
+    # Send initial connection confirmation
+    await websocket.send_json({
+        "type": "connected",
+        "message": "Connected to sentiment stream",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    })
+    
+    try:
+        # Keep connection alive and listen for messages
+        while True:
+            # Wait for any messages from client (ping/pong, etc.)
+            try:
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=60.0)
+            except asyncio.TimeoutError:
+                # Send ping to keep connection alive
+                await websocket.send_json({"type": "ping", "timestamp": datetime.now(timezone.utc).isoformat()})
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+        print("Client disconnected")
+    except Exception as e:
+        print(f"WebSocket error: {e}")
+        manager.disconnect(websocket)
