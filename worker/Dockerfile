@@ -25,7 +25,6 @@ ENV PYTHONPATH=/app
 
 # Set HuggingFace cache directory (will be mounted as volume)
 ENV HF_HOME=/root/.cache/huggingface
-ENV TRANSFORMERS_CACHE=/root/.cache/huggingface/transformers
 
 # Pre-download ML models during build to cache them
 # This layer will be cached unless dependencies change
