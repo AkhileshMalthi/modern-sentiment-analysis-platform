@@ -8,6 +8,14 @@ from typing import Optional
 from transformers import pipeline
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
+# Enable transformers logging to see model loading progress
+os.environ['TRANSFORMERS_VERBOSITY'] = 'info'
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
 logger = logging.getLogger(__name__)
 
 def build_prompt(text: str, task: str) -> str:
@@ -38,20 +46,37 @@ class SentimentAnalyzer:
     def __init__(self, model_type: str = 'local', model_name: Optional[str] = None):
         self.model_type = model_type
         self.device = -1  # CPU by default
+        logger.info(f"Initializing SentimentAnalyzer with model_type: {self.model_type}")
         
         if self.model_type == 'local':
             # Sentiment Model
             s_model = model_name or os.getenv("HUGGINGFACE_MODEL", "distilbert-base-uncased-finetuned-sst-2-english")
+            
+            logger.info(f"🤖 Loading Sentiment Analysis Model...")
+            logger.info(f"📦 Model: {s_model}")
+            logger.info(f"Loading sentiment model: {s_model}")
+
             self.sentiment_pipe = pipeline("text-classification", model=s_model, device=self.device)
             
+            logger.info("✅ Sentiment model loaded successfully!")
+
             # Emotion Model
             e_model = os.getenv("EMOTION_MODEL", "j-hartmann/emotion-english-distilroberta-base")
+            
+            logger.info(f"🎭 Loading Emotion Analysis Model...")
+            logger.info(f"📦 Model: {e_model}")
+            logger.info(f"Loading emotion model: {e_model}")
+            
             self.emotion_pipe = pipeline("text-classification", model=e_model, device=self.device)
+            
+            logger.info("✅ Emotion model loaded successfully!")
+            logger.info("All models loaded successfully")
             
         else:
             self.api_key = os.getenv("EXTERNAL_LLM_API_KEY")
             self.api_url = "https://api.groq.com/openai/v1/chat/completions" # Default to Groq
             self.llm_model = os.getenv("EXTERNAL_LLM_MODEL", "llama-3.1-8b-instant")
+            logger.info(f"Using external LLM API: {self.llm_model}")
 
     async def analyze_sentiment(self, text: str) -> dict:
         if not text:
@@ -243,3 +268,16 @@ class SentimentAnalyzer:
             } for r in results]
         else:
             return await asyncio.gather(*[self.analyze_sentiment(t) for t in texts])
+        
+
+# if __name__ == "__main__":
+    
+#     # Example usage
+#     analyzer = SentimentAnalyzer(model_type='local')
+    
+#     test_text = "I love programming! It's so much fun."
+#     sentiment_result = asyncio.run(analyzer.analyze_sentiment(test_text))
+#     emotion_result = asyncio.run(analyzer.analyze_emotion(test_text))
+    
+#     print("Sentiment Analysis Result:", sentiment_result)
+#     print("Emotion Analysis Result:", emotion_result)
