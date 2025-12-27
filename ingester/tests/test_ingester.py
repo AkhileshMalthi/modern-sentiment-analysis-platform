@@ -9,7 +9,7 @@ import sys
 sys.modules['redis'] = MagicMock()
 sys.modules['redis.asyncio'] = MagicMock()
 
-from ingester.ingester import DataIngester
+from ingester import DataIngester
 
 
 class TestDataIngester:
@@ -170,10 +170,11 @@ class TestDataIngester:
     async def test_post_has_valid_timestamp(self, ingester):
         """Test that generated posts have valid timestamps."""
         post = ingester.generate_post()
-        
-        # Parse timestamp
-        timestamp = datetime.fromisoformat(post['created_at'].replace('Z', '+00:00'))
-        
+        # Remove 'Z' if present, then parse as UTC
+        created_at = post['created_at']
+        if created_at.endswith('Z'):
+            created_at = created_at[:-1]
+        timestamp = datetime.fromisoformat(created_at)
         # Should be recent (within last minute)
         now = datetime.now(timezone.utc)
         diff = (now - timestamp).total_seconds()

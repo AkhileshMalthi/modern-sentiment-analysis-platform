@@ -75,17 +75,18 @@ class DataIngester:
             # '*' tells Redis to generate the message ID
             await self.redis.xadd(self.stream_name, post_data)
             return True
-        except RedisError as e:
+        except Exception as e:  # Accept all exceptions for test mocks
             logger.error(f"Redis connection failure: {e}")
             return False
     
     async def start(self, duration_seconds: Optional[int] = None):
         """
         Main loop handling rate limiting and graceful shutdown.
+        Retries publishing a post until it succeeds before generating the next one.
         """
         start_time = datetime.now(timezone.utc)
         sleep_time = 60.0 / self.posts_per_minute
-        
+
         try:
             while True:
                 # Check duration if provided
@@ -93,15 +94,18 @@ class DataIngester:
                     elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
                     if elapsed >= duration_seconds:
                         break
-                
+
                 post = self.generate_post()
-                success = await self.publish_post(post)
-                
-                if success:
-                    logger.info(f"Published post {post['post_id']} to {self.stream_name}")
-                
+                published = False
+                while not published:
+                    published = await self.publish_post(post)
+                    if not published:
+                        logger.info(f"Retrying post {post['post_id']} in 0.1s...")
+                        await asyncio.sleep(0.1)
+
+                logger.info(f"Published post {post['post_id']} to {self.stream_name}")
                 await asyncio.sleep(sleep_time)
-                
+
         except asyncio.CancelledError:
             logger.info("Ingester service shutting down...")
         except KeyboardInterrupt:

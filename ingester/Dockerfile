@@ -10,10 +10,10 @@ COPY pyproject.toml uv.lock ./
 
 # Install locked dependencies with cache mount
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+    uv pip install --system -r pyproject.toml --group dev
 
 # Copy application code
 COPY . ./
 
 # Run the ingester script with uv (uses the venv)
-CMD ["uv", "run", "python", "ingester.py"]
+CMD ["python", "ingester.py"]
