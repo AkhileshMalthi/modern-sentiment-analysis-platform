@@ -15,7 +15,7 @@ class TestAlertService:
         """Create mock database session."""
         session = AsyncMock()
         session.execute = AsyncMock()
-        session.add = AsyncMock()
+        session.add = Mock()  # db.add() is synchronous, not async
         session.commit = AsyncMock()
         session.refresh = AsyncMock()
         session.rollback = AsyncMock()
