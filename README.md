@@ -26,6 +26,12 @@ This platform implements a microservices architecture for analyzing sentiment in
 
 For detailed technical documentation including system architecture, data flow diagrams, database schema, API specifications, deployment strategies, and scalability considerations, please refer to [ARCHITECTURE.md](ARCHITECTURE.md).
 
+### Platform Preview
+
+![Sentiment Analysis Platform Dashboard](assets/Sentiment-Analysis-Platform-App-ScreenShot.png)
+
+*Live dashboard showing real-time sentiment distribution, temporal trends, and streaming post feed with sentiment classification*
+
 ## System Requirements
 
 ### Software Dependencies
