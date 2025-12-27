@@ -15,6 +15,7 @@ export default function Dashboard() {
     neutral: 0
   });
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
+  const [lastUpdate, setLastUpdate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const wsRef = useRef(null);
@@ -51,7 +52,7 @@ export default function Dashboard() {
         setDistributionData(distArray);
         setTrendData(transformedTrendData);
         setRecentPosts(posts.posts || []);
-        
+
         // Update metrics from distribution
         setMetrics({
           total: distribution.total || 0,
@@ -60,6 +61,7 @@ export default function Dashboard() {
           neutral: distribution.distribution?.neutral || 0
         });
 
+        setLastUpdate(new Date());
         setLoading(false);
       } catch (err) {
         console.error('Error loading initial data:', err);
@@ -76,16 +78,17 @@ export default function Dashboard() {
     const connectWS = () => {
       try {
         setConnectionStatus('connecting');
-        
+
         wsRef.current = connectWebSocket(
           // onMessage
           (data) => {
             setConnectionStatus('connected');
-            
+            setLastUpdate(new Date()); // Set lastUpdate on WebSocket message
+
             if (data.type === 'new_post') {
               // Add new post to the feed
               setRecentPosts(prev => [data.data, ...prev].slice(0, 20));
-              
+
               // Update metrics
               setMetrics(prev => ({
                 total: prev.total + 1,
@@ -98,7 +101,7 @@ export default function Dashboard() {
               setDistributionData(prev => {
                 const newData = [...prev];
                 const sentimentIndex = newData.findIndex(item => item.sentiment === data.data.sentiment?.label);
-                
+
                 if (sentimentIndex >= 0) {
                   newData[sentimentIndex] = {
                     ...newData[sentimentIndex],
@@ -130,7 +133,7 @@ export default function Dashboard() {
           (event) => {
             console.log('WebSocket closed:', event.code);
             setConnectionStatus('disconnected');
-            
+
             // Attempt to reconnect after 5 seconds
             if (reconnectTimeoutRef.current) {
               clearTimeout(reconnectTimeoutRef.current);
@@ -196,10 +199,10 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         minHeight: '100vh',
         fontSize: '1.5rem',
         fontWeight: 'bold',
@@ -212,10 +215,10 @@ export default function Dashboard() {
 
   if (error) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         minHeight: '100vh',
         flexDirection: 'column',
         gap: '1rem'
@@ -223,7 +226,7 @@ export default function Dashboard() {
         <div style={{ fontSize: '1.125rem', color: '#ef4444' }}>
           {error}
         </div>
-        <button 
+        <button
           onClick={() => window.location.reload()}
           style={{
             padding: '0.5rem 1rem',
@@ -251,30 +254,38 @@ export default function Dashboard() {
   };
 
   return (
-    <div style={{ 
+    <div style={{
       minHeight: '100vh',
       padding: '2rem',
       backgroundColor: '#0f172a'
     }}>
       {/* Header */}
       <div style={{ marginBottom: '2rem' }}>
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
           alignItems: 'center',
           marginBottom: '0.5rem'
         }}>
           <h1 style={{ fontSize: '2rem', fontWeight: 700, color: '#f8fafc' }}>
             Real-Time Sentiment Analysis Dashboard
           </h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span 
-              className={connectionStatus === 'connected' ? 'status-indicator status-live' : 'status-indicator status-disconnected'}
-              style={{ backgroundColor: getStatusColor() }}
-            />
-            <span style={{ fontSize: '0.875rem', color: '#94a3b8', textTransform: 'capitalize' }}>
-              {connectionStatus}
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '0.875rem', color: '#94a3b8' }}>Status:</span>
+              <span
+                className={connectionStatus === 'connected' ? 'status-indicator status-live' : 'status-indicator status-disconnected'}
+                style={{ backgroundColor: getStatusColor() }}
+              />
+              <span style={{ fontSize: '0.875rem', color: connectionStatus === 'connected' ? '#10b981' : '#94a3b8', fontWeight: 500 }}>
+                {connectionStatus === 'connected' ? 'Live' : connectionStatus}
+              </span>
+            </div>
+            {lastUpdate && (
+              <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>
+                Last Update: {lastUpdate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+              </div>
+            )}
           </div>
         </div>
         <p style={{ color: '#94a3b8' }}>
@@ -282,12 +293,27 @@ export default function Dashboard() {
         </p>
       </div>
 
+      {/* Distribution Chart + Live Feed Row */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+        gap: '1.5rem',
+        marginBottom: '1.5rem'
+      }}>
+        <DistributionChart data={distributionData} />
+        <LiveFeed posts={recentPosts} />
+      </div>
+
+      {/* Sentiment Trend Chart (Full Width) */}
+      <div style={{ marginBottom: '1.5rem' }}>
+        <SentimentChart data={trendData} />
+      </div>
+
       {/* Metrics Cards */}
-      <div style={{ 
-        display: 'grid', 
+      <div style={{
+        display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '1rem',
-        marginBottom: '2rem'
+        gap: '1rem'
       }}>
         <div className="card" style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: '0.5rem' }}>
@@ -297,7 +323,7 @@ export default function Dashboard() {
             {metrics.total.toLocaleString()}
           </div>
         </div>
-        
+
         <div className="card" style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: '0.5rem' }}>
             Positive
@@ -306,7 +332,7 @@ export default function Dashboard() {
             {metrics.positive.toLocaleString()}
           </div>
         </div>
-        
+
         <div className="card" style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: '0.5rem' }}>
             Negative
@@ -315,7 +341,7 @@ export default function Dashboard() {
             {metrics.negative.toLocaleString()}
           </div>
         </div>
-        
+
         <div className="card" style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: '0.5rem' }}>
             Neutral
@@ -325,20 +351,6 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-
-      {/* Main Content Grid */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-        gap: '1.5rem',
-        marginBottom: '1.5rem'
-      }}>
-        <DistributionChart data={distributionData} />
-        <SentimentChart data={trendData} />
-      </div>
-
-      {/* Live Feed */}
-      <LiveFeed posts={recentPosts} />
     </div>
   );
 }
