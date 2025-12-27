@@ -24,58 +24,7 @@ The Real-Time Sentiment Analysis Platform is a distributed microservices system 
 
 ### High-Level Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                         USER INTERFACE                            │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │           React Dashboard (Port 3000)                       │  │
-│  │  • Sentiment Distribution Chart (Pie)                       │  │
-│  │  • Sentiment Trends Chart (Line)                            │  │
-│  │  • Live Post Feed                                           │  │
-│  │  • Real-time Metrics                                        │  │
-│  └─────────────────┬──────────────────────────────────────────┘  │
-└────────────────────┼───────────────────────────────────────────────┘
-                     │ HTTP/WebSocket
-┌────────────────────▼───────────────────────────────────────────────┐
-│                      API GATEWAY LAYER                             │
-│  ┌──────────────────────────────────────────────────────────────┐ │
-│  │         FastAPI Backend (Port 8000)                          │ │
-│  │  • REST API Endpoints                                        │ │
-│  │  • WebSocket Server                                          │ │
-│  │  • Request Validation                                        │ │
-│  │  • CORS Handling                                             │ │
-│  └────────┬─────────────────────────────────────┬──────────────┘ │
-└───────────┼─────────────────────────────────────┼─────────────────┘
-            │                                     │
-    ┌───────▼──────┐                     ┌───────▼──────┐
-    │   Database   │                     │    Redis     │
-    │ (PostgreSQL) │                     │   (Cache)    │
-    │              │                     │              │
-    │  • Posts     │                     │ • Aggregates │
-    │  • Analysis  │                     │ • Session    │
-    │  • Alerts    │                     └──────┬───────┘
-    └──────▲───────┘                            │
-           │                                    │
-┌──────────┼────────────────────────────────────┼─────────────────────┐
-│          │         PROCESSING LAYER           │                     │
-│          │                                    │                     │
-│  ┌───────┴────────┐              ┌───────────▼──────────┐          │
-│  │  Worker Pool   │◄─────────────┤   Redis Streams      │          │
-│  │                │  XREADGROUP  │                      │          │
-│  │ • Sentiment    │              │ • Message Queue      │          │
-│  │ • Emotion      │              │ • Consumer Groups    │          │
-│  │ • Batch Proc.  │              │ • At-Least-Once      │          │
-│  └────────────────┘              └───────────▲──────────┘          │
-│                                               │                     │
-│                                   ┌───────────┴──────────┐          │
-│                                   │  Ingester Service    │          │
-│                                   │                      │          │
-│                                   │ • Data Generation    │          │
-│                                   │ • Rate Limiting      │          │
-│                                   │ • Stream Publishing  │          │
-│                                   └──────────────────────┘          │
-└─────────────────────────────────────────────────────────────────────┘
-```
+![HLD](assets/Sentiment-Analysis-Live-Dashboard.svg)
 
 ### System Components
 
