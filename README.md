@@ -93,40 +93,58 @@ For detailed technical documentation including system architecture, data flow di
 
 ## Architecture
 
-The platform implements a distributed microservices architecture with the following components:
+
+The platform implements a distributed microservices architecture with clear data flow and service relationships:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Frontend (React + Vite)                    Port: 3000      │
-│  - WebSocket client for real-time updates                   │
-│  - Interactive data visualization (Recharts)                │
-└────────────────────────┬────────────────────────────────────┘
-                         │ HTTP/WebSocket
-┌────────────────────────▼────────────────────────────────────┐
-│  Backend API (FastAPI)                      Port: 8000      │
-│  - REST endpoints for data access                           │
-│  - WebSocket server for live updates                        │
-│  - Aggregation and caching layer                            │
-└───────┬─────────────────────────────────────────┬───────────┘
-        │                                         │
-┌───────▼─────────────────────┐   ┌──────────────▼──────────┐
-│  Redis (v7)                 │   │  PostgreSQL (v15)       │
-│  - Stream-based queue       │   │  - Persistent storage   │
-│  - L1 cache layer           │   │  - Relational schema    │
-└───────▲─────────────────────┘   └─────────────────────────┘
-        │
-┌───────┴─────────────────────┐
-│  Worker (Python)            │
-│  - ML model inference       │
-│  - Consumer group processor │
-└─────────────────────────────┘
-        ▲
-┌───────┴─────────────────────┐
-│  Ingester (Python)          │
-│  - Stream publisher         │
-│  - Rate-limited data source │
-└─────────────────────────────┘
+          ┌────────────────────────────────────────────────────────────────────────────┐
+          │                              Frontend (React)                              │
+          │      - Web dashboard (charts, live feed)                                   │
+          │      - Connects to Backend API via HTTP/WebSocket                          │
+          └───────────────────────────────┬────────────────────────────────────────────┘
+                                          │ HTTP/WebSocket
+          ┌───────────────────────────────▼────────────────────────────────────────────┐
+          │                             Backend API (FastAPI)                          │
+          │      - REST API, WebSocket server                                          │
+          │      - Aggregates/query data from PostgreSQL                               │
+          │      - Caches aggregates in Redis                                          │
+          └────────────────────────────────────────────────────────────────────────────┘
+                                         │
+                                         │
+                                         ▼
+                                  ┌──────────────┐
+                                  │ PostgreSQL   │
+                                  │ (Persistent  │
+                                  │  Storage)    │
+                                  └──────────────┘
+                                         ▲
+                                         │
+                                  ┌──────────────┐
+                                  │  Worker      │
+                                  │  (Python)    │
+                                  │- Consumes    │
+                                  │  from Redis  │
+                                  │- ML Inference│
+                                  │- Writes to   │
+                                  │  PostgreSQL  │
+                                  └──────────────┘
+                                         ▲
+                                         │
+                                  ┌──────────────┐
+                                  │   Redis      │
+                                  │ (Streams &   │
+                                  │  Cache)      │
+                                  └──────────────┘
+                                         ▲
+                                         │
+                                  ┌──────────────┐
+                                  │  Ingester    │
+                                  │  (Python)    │
+                                  │- Publishes   │
+                                  │  to Redis    │
+                                  └──────────────┘
 ```
+*Data flow: Ingester → Redis → Worker → PostgreSQL → Backend API → Frontend. Backend also uses Redis for caching aggregates.*
 
 ### Component Overview
 
