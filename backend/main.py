@@ -17,6 +17,7 @@ from models.database import Base
 # Import routers
 from api.routes import router as api_router
 from api.websocket import router as ws_router
+from api.websocket import send_periodic_metrics, monitor_new_posts
 
 # Import alert service
 from services.alerting import get_alert_service
@@ -67,7 +68,6 @@ async def lifespan(app: FastAPI):
         
         # Start WebSocket background tasks
         logger.info("🔌 Starting WebSocket monitoring tasks...")
-        from api.websocket import send_periodic_metrics, monitor_new_posts
         ws_metrics_task = asyncio.create_task(send_periodic_metrics())
         ws_monitor_task = asyncio.create_task(monitor_new_posts())
         logger.info("✅ WebSocket monitoring tasks started")
